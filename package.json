@@ -1,0 +1,12 @@
+{
+  "name": "genetic-cars-workspace",
+  "private": true,
+  "packageManager": "bun@1.3.2",
+  "scripts": {
+    "start": "bun scripts/start.ts",
+    "build": "bun install --cwd frontend --frozen-lockfile && cargo build --release --locked && bun run types && bun run --cwd frontend build",
+    "types": "cargo run --quiet --locked -- --export-types frontend/src/lib/types.ts",
+    "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets --locked -- -D warnings && bun run --cwd frontend check",
+    "smoke": "bun scripts/smoke.ts"
+  }
+}

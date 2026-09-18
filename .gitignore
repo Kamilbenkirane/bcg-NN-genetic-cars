@@ -1,3 +1,14 @@
-# Data
+# Build outputs
+target/
+node_modules/
+.next/
+frontend/out/
+*.tsbuildinfo
+
+# Local experiment data
 data/
 
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

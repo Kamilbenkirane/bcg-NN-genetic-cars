@@ -1,0 +1,25 @@
+// Generated from backend/src/model.rs. Run bun run types.
+export type VehicleConfig = { stepDistance: number, sensorRange: number, maxHeadingChange: number, };
+export type TrainingConfig = { population: number, generationsPerCircuit: number, targetLaps: number, eliteCount: number, mutations: number, mutationScale: number, };
+export type RunConfig = { seed: string, vehicle: VehicleConfig, training: TrainingConfig, };
+export type Track = { points: Array<[number, number]>, left: Array<[number, number]>, right: Array<[number, number]>, width: number, spawn: [number, number, number], spawnDistance: number, lapLength: number, };
+export type CarStatus = "running" | "crashed" | "finished" | "timed_out";
+export type CarOutcome = { carId: number, fitness: number, status: CarStatus, terminalStep: number, completedLaps: number, lapEnds: Array<LapCrossing>, x: number, y: number, heading: number, };
+export type GenerationSummary = { generation: number, stageIndex: number, bestCarId: number, bestLapSeconds: number | null, bestFitness: number, meanFitness: number, finished: number, crashed: number, timedOut: number, steps: number, elapsedMs: number, carSteps: number, };
+export type RunStatus = "queued" | "running" | "stopping" | "stopped" | "completed" | "failed";
+export type RunSummary = { id: string, name: string, createdAt: string, status: RunStatus, config: RunConfig, completedGenerations: number, lastError: string | null, deviceName: string, engineVersion: string, totalGenerations: number, };
+export type RunDetail = { run: RunSummary, stages: Array<RunStage>, simulationHz: number, };
+export type RunStage = { index: number, circuit: Circuit, firstGeneration: number, maxSteps: number, recordKey: string, baselineRecordId: string | null, };
+export type LapCrossing = { step: number, fraction: number, };
+export type LapRecord = { id: string, recordKey: string, circuitId: string, createdAt: string, runId: string, runName: string, generation: number, carId: number, lap: number, lapSeconds: number, ghostFrames: number, };
+export type CircuitRecord = { stageIndex: number, champion: LapRecord | null, baseline: LapRecord | null, };
+export type CreateRunRequest = { requestId: string, name: string, config: RunConfig, };
+export type Circuit = { id: string, name: string, character: string, description: string, track: Track, };
+export type PreviewSnapshot = { runId: string, generation: number, stageIndex: number, step: number, carCount: number, cars: Array<CarOutcome>, };
+export type ReplayStatus = "queued" | "running" | "ready" | "failed";
+export type ReplayManifest = { runId: string, generation: number, stageIndex: number, bestCarId: number, simulationHz: number, status: ReplayStatus, carCount: number, totalFrames: number, lastStep: number, sampleStride: number, framesPerChunk: number, chunks: number, availableChunks: Array<number>, outcomes: Array<CarOutcome>, error: string | null, };
+export type ReplayProgress = { runId: string, generation: number, status: ReplayStatus, availableChunks: Array<number>, chunks: number, error: string | null, };
+export type ReplayRequest = { follow: boolean, };
+export type TraceFrame = { step: number, x: number, y: number, heading: number, sensors: [number, number, number, number, number], steering: number, };
+export type CarTrace = { runId: string, generation: number, carId: number, frames: Array<TraceFrame>, sampleStride: number, };
+export type Health = { status: string, deviceName: string, engineVersion: string, };

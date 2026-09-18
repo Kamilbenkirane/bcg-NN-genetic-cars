@@ -1,0 +1,26 @@
+[package]
+name = "genetic-cars"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.89"
+default-run = "genetic-cars"
+
+[dependencies]
+anyhow = "1"
+async-stream = "0.3"
+axum = "0.8"
+bytemuck = { version = "1", features = ["derive"] }
+objc2 = "0.6.3"
+objc2-foundation = "0.3.2"
+objc2-metal = "0.3.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "sqlite"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "limit"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ts-rs = { version = "11", features = ["serde-compat"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+

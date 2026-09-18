@@ -1,82 +1,45 @@
-# bcg-NN-genetic-cars
-Repo for Kamil Benkirane's BCG Mindfuel about Self driving cars using Neural Networks trained by genetic algorithms
+# Genetic Cars
 
-## Environment
-In this project we are using python 3.8, to create environment using conda with the packages requirements, run:
-```bash
-conda create --name <env> python=3.8 --file requirements.txt
-``` 
+A local experiment workspace for evolving neural driving controllers. Rust owns the service and a native Metal engine; a static Next.js / React application plays completed generations in Canvas2D.
 
 ## Run
-To run the project, run:
-```bash
-streamlit run app.py
+
+Requires Apple Silicon, macOS 15 or later, Rust via rustup, Bun 1.3.2, and Node 20.9+ for the Next.js build. Open the application in Chrome.
+
+```sh
+bun run start
 ```
 
-# Project Overview
-In this project I wanted to explore different topics, neural networks, genetic algorighms and self driving cars.
-Because of the short timeframe I decided to use a simple approach like this.
-I hope you'll enjoy it.
+Open **http://127.0.0.1:8501**. The first start downloads dependencies and builds the application. To launch an existing build directly:
 
-## Environment
-The environment consist of a 2D route and a number of cars.
-Each car runs the route and tries to get as far as possible.
-At the end of the race the 10 best cars are selected, modified a little bit in order to create a new generation of cars.
-This process is repeated until the cars are able to finish the route.
+```sh
+./target/release/genetic-cars
+```
 
-## Route
-The route is a 2D map with a start and finish line.
-It is defined by a number of points generated randomly
-We start with a initial point at position (0,0) and we add a new point at a distance of 1 and a random angle until we reach the number of points.
-The route is then drawn using the points.
-![route.png](images/route.png)
+Optional server arguments: `--port 8501`, `--data-dir PATH`, `--frontend-dir PATH`. Experiments default to `~/Library/Application Support/Genetic Cars`; `GENETIC_CARS_DATA_DIR` overrides that location.
 
-## Car
-The car is a simple object with a position, a direction and a speed.
-The car has 5 antennas that are used to detect the distance to the edges of the route.
-The antennas are placed at the front, left, right, left front and right front of the car.  
-![car.png](images/car.png)
-The 5 distances from the car to the edges of the route are used as input for the neural network.
-The output of the neural network is the angle from the current car angle to turn the car.
-The car is then moved forward by the speed and the angle is applied. 
-The speed is fixed.
+Set cars, laps (1–100, default 5), and generations per circuit (default 50), then **Start driving**. Each run trains one population through all six circuits in a seeded random order. At each transition the previous population arrives unchanged: compare its arrival finish rate with its rate after learning the new circuit. Advanced vehicle and genetic settings remain under **Advanced settings**; leave the seed blank for a fresh run. Training continues when you close the browser. Stop discards uncommitted work; resume and server restart retain the tour and last checkpoint.
 
-## Mutation
-At the end of the race, the 10 best cars are selected and modified a little bit in order to create a new generation of cars.
-The 10 best cars are selected based on the distance they were able to drive.
-Those 10 cars will remain identical for the next generation.
-And for each of the (assuming a generation of 100 cars), 9 children will be created.
-each children will have one neuron, randomly selected, from any of the layers, that will be modified. 
+Playback follows completed generations independently of training. Auto-advance visits each circuit’s arrival and final population; the tour cards open either replay directly. Pan, zoom, follow or inspect cars in the same viewport. Progress, survival, generation time and fastest-lap statistics remain available.
 
-## Results
-### Generation 0
-At generation 0, the last carz get stuck at the first turn.![generation 0.png](images/generation_00.png)
-[generation_0_run.html](images/generation_0_run.html)
-### Generation 1
-At generation 1, the last car get stuck midway.![generation 1.png](images/generation_23.png)
-[generation_1_run.html](images/generation_1_run.html)
+Valid laps compete against the all-time champion for the same circuit geometry and vehicle settings. Finishers are selected by completion time; other cars by progress. Lap times use 30 simulation steps per second and fractional timing-line crossings, independently of playback speed. A cyan ghost follows the reference champion, aligned to the viewed car’s lap. Records and their single-lap ghosts are permanent and survive replay-cache eviction; champions never enter the breeding population.
 
-### Generation 5
-At generation 5 more cars get to that step.![generation 5.png](images/generation_4.png)
-[generation_5_run.html](images/generation_5_run.html)
+Tours and champions are stored in the stable `race-lab.sqlite3` database. Earlier `experiments-v3.sqlite3` and `experiments.sqlite3` files are preserved untouched and are not imported.
 
-### Generation 18
-At generation 18, one car is able to get past that stuck point.
-![generation 18.png](images/generation_1.png)
-[generation_18_run.html](images/generation_18_run.html)
+## Engine and storage
 
-### Generation 23
-At generation 23, one car is able to finish the route.
-![generation 23.png](images/generation_0.png)
-[generation_23_run.html](images/generation_23_run.html)
+- Metal computes sensors, the 5–3–1 tanh controller, swept point-car movement, collisions, fitness, ranking and mutation. Rust prepares validated road geometry and its BVH once, then schedules bounded GPU blocks. There is no CPU simulation backend. Native Metal kernels fuse geometry and inference without a separate MPS tensor pipeline.
+- A run records its seed, immutable parameters, circuit order and roads, engine identity and parameter-major f32 population checkpoints. Philox randomness depends on explicit seed/generation/car counters. This is an f32 engine contract; checkpoint reuse requires the same engine/shader/device identity.
+- SQLite commits each completed generation and its next population atomically. Summaries and status changes reach the browser through resumable SSE. Preview messages contain at most 128 terminal cars.
+- Replays and selected-car readings use the same GPU kernel. While training and replay both need work, the owner schedules three training blocks per replay/inspection block. Replay generation therefore shares GPU time with training; downloading stored chunks does not.
+- Replay chunks contain up to 32 frames. A 16-byte little-endian u32 header (`version=2, firstFrame, frameCount, carCount`) precedes frame-major f32 `[x, y, heading]` values. Replay and inspection data retain at most 10,000 samples, including both endpoints; the manifest carries the sampling stride and final simulation step. The browser bounds its decoded cache at 64 MiB; the server bounds derived replay/inspection data at 2 GiB. Experiment history and checkpoints are retained.
 
+## Development
 
+```sh
+bun run build       # Rust release binary, generated TS contracts, static frontend
+bun run check       # Rust formatting/lints and frontend checks
+bun run smoke       # One local GPU workflow; build first
+```
 
-
-
-
-
-
-
-
-
+`backend/src/model.rs` defines the wire types; `bun run types` regenerates the TypeScript declarations. Backend code lives in `backend/src`; the Canvas player lives in `frontend/src/lib/race-player.ts`. Bun manages packages and commands; Next's build CLI uses Node because Bun 1.3.2 cannot run this Next release's build internals. The server serves `frontend/out` and `/api` from the same local origin. No Node production server is required.
