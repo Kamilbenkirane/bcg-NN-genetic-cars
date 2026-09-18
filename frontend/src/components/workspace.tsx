@@ -78,13 +78,9 @@ function ExperimentWorkspace() {
   const client = useQueryClient();
   const [runData] = useState(() => new RunData(client));
   const params = useSearchParams();
-  const [runId, setRunId] = useState<string | null>(params.get("run"));
-  const [generation, setGeneration] = useState<number | null>(
-    integerParam(params.get("generation")),
-  );
-  const [selected, setSelected] = useState<number | null>(
-    integerParam(params.get("car")),
-  );
+  const runId = params.get("run");
+  const generation = integerParam(params.get("generation"));
+  const selected = integerParam(params.get("car"));
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [name, setName] = useState("");
   const [sidebar, setSidebar] = useState<"setup" | "history">("setup");
@@ -193,16 +189,11 @@ function ExperimentWorkspace() {
   });
 
   useEffect(() => {
-    const id = params.get("run");
-    if (viewedId.current !== id) viewRevision.current++;
-    viewedId.current = id;
-    setRunId(id);
-    setGeneration(integerParam(params.get("generation")));
-    setSelected(integerParam(params.get("car")));
-  }, [params]);
+    if (viewedId.current !== runId) viewRevision.current++;
+    viewedId.current = runId;
+  }, [runId]);
   useEffect(() => {
     if (generation === null && latest !== null) {
-      setGeneration(0);
       locationState(runId, 0, selected);
     }
   }, [generation, latest, runId, selected]);
@@ -219,9 +210,7 @@ function ExperimentWorkspace() {
         latest,
         run?.config.training.generationsPerCircuit ?? 50,
       );
-      setGeneration(next);
       setPlaybackEnded(false);
-      setSelected(null);
       locationState(runId, next, null);
     }
   }, [
@@ -236,17 +225,12 @@ function ExperimentWorkspace() {
   const chooseRun = useCallback((id: string | null) => {
     viewRevision.current++;
     viewedId.current = id;
-    setRunId(id);
-    setGeneration(null);
-    setSelected(null);
     setFollowLatest(true);
     setPlaybackEnded(false);
     setError(null);
     locationState(id, null, null, true);
   }, []);
   const chooseGeneration = (value: number) => {
-    setGeneration(value);
-    setSelected(null);
     setFollowLatest(false);
     setPlaybackEnded(false);
     setError(null);
@@ -254,7 +238,6 @@ function ExperimentWorkspace() {
   };
   const chooseCar = useCallback(
     (car: number | null) => {
-      setSelected(car);
       locationState(runId, generation, car);
     },
     [runId, generation],

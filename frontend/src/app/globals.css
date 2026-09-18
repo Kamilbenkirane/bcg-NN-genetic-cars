@@ -217,15 +217,13 @@ input[type="checkbox"] {
 }
 
 .population-number {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  margin-bottom: 3px;
+  display: block;
+  margin-bottom: 6px;
 }
 .population-number input {
   min-width: 0;
-  width: 116px;
-  font-size: 37px;
+  width: 100%;
+  font-size: 32px;
   font-family: var(--serif);
   line-height: 1;
   border: 0;
@@ -234,16 +232,15 @@ input[type="checkbox"] {
   padding: 0;
 }
 .population-number > span:last-child {
-  color: var(--muted);
-  font-size: 12px;
+  display: none;
 }
 .population-presets {
-  display: flex;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
   margin-top: 7px;
 }
 .population-presets button {
-  flex: 1;
   font-size: 11px;
   border: 1px solid var(--line);
   background: transparent;
@@ -375,8 +372,7 @@ input[type="checkbox"] {
   background: #bf8175;
 }
 .main-workspace {
-  height: 100dvh;
-  min-height: 580px;
+  min-height: 100dvh;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -450,7 +446,7 @@ input[type="checkbox"] {
 .race-card {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: none;
   min-height: 0;
   border: 1px solid #ccd7c8;
   border-radius: 13px;
@@ -514,7 +510,8 @@ input[type="checkbox"] {
 
 .viewport-wrap {
   position: relative;
-  flex: 1;
+  flex: none;
+  height: clamp(380px, 58dvh, 740px);
   min-height: 250px;
   overflow: hidden;
   background: #17332d;
@@ -1115,8 +1112,6 @@ input[type="checkbox"] {
     display: none;
   }
   .main-workspace {
-    height: 85dvh;
-    min-height: 560px;
     padding: 20px 12px;
   }
   .workspace-header {
@@ -1199,7 +1194,7 @@ input[type="checkbox"] {
 
 .statistics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin: 0 0 17px;
 }
@@ -1207,7 +1202,7 @@ input[type="checkbox"] {
   border: 1px solid #dce3d5;
   background: #fcfdf8;
   border-radius: 10px;
-  padding: 15px 17px 12px;
+  padding: 13px;
   min-width: 0;
 }
 .stat-label {
@@ -1220,7 +1215,7 @@ input[type="checkbox"] {
   display: flex;
   align-items: baseline;
   gap: 5px;
-  font: 31px / 1.35 var(--serif);
+  font: clamp(22px, 2.2vw, 32px) / 1.35 var(--serif);
   margin: 7px 0 3px;
   white-space: nowrap;
 }
@@ -1277,25 +1272,14 @@ input[type="checkbox"] {
   background: #b2aac2;
 }
 @media (max-width: 1200px) {
-  .stat-card {
-    padding: 12px;
-  }
-  .stat-value {
-    font-size: 25px;
+  .statistics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .stat-sparkline {
     width: 48px;
   }
   .stat-change {
     display: block;
-  }
-}
-@media (max-width: 950px) {
-  .statistics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .main-workspace {
-    min-height: 720px;
   }
 }
 
@@ -1355,22 +1339,6 @@ input[type="checkbox"] {
   margin-top: 20px;
   padding-top: 16px;
 }
-.drive-controls .population-number {
-  display: block;
-  margin-bottom: 6px;
-}
-.drive-controls .population-number input {
-  width: 100%;
-  font-size: 32px;
-}
-.drive-controls .population-number > span:last-child {
-  display: none;
-}
-.drive-controls .population-presets {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
-}
 .lap-control .population-presets button:last-child {
   grid-column: 1 / -1;
 }
@@ -1408,39 +1376,6 @@ input[type="checkbox"] {
   }
 }
 
-@media (max-width: 760px) {
-  .main-workspace {
-    height: auto;
-  }
-  .race-card {
-    flex: none;
-  }
-  .viewport-wrap {
-    min-height: 55dvh;
-  }
-}
-
-/* Tours keep the race comfortably sized as its history grows. */
-.main-workspace {
-  height: auto;
-  min-height: 100dvh;
-}
-.race-card {
-  flex: none;
-}
-.viewport-wrap {
-  height: clamp(380px, 58dvh, 740px);
-  flex: none;
-}
-.statistics {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-.stat-card {
-  padding: 13px;
-}
-.stat-value {
-  font-size: clamp(22px, 2.2vw, 32px);
-}
 .tour-intro {
   font-size: 12px;
   line-height: 1.6;
@@ -1702,11 +1637,6 @@ input[type="checkbox"] {
 .welcome-steps i {
   color: #7e9b71;
   font-style: normal;
-}
-@media (max-width: 1200px) {
-  .statistics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 @media (max-width: 760px) {
   .statistics {

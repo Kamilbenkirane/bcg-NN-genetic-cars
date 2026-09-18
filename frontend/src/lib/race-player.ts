@@ -103,7 +103,7 @@ export class RacePlayer {
   private ghost: Float32Array | null = null;
   private overlays = { centerline: false, sensors: false, trajectory: false };
   private drag: { x: number; y: number; moved: boolean } | null = null;
-  private cleanup: (() => void)[] = [];
+  private events = new AbortController();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -122,10 +122,9 @@ export class RacePlayer {
       this.lastTime = 0;
       this.dirty = true;
     };
-    document.addEventListener("visibilitychange", visibility);
-    this.cleanup.push(() =>
-      document.removeEventListener("visibilitychange", visibility),
-    );
+    document.addEventListener("visibilitychange", visibility, {
+      signal: this.events.signal,
+    });
     this.resize();
     this.raf = requestAnimationFrame(this.frame);
   }
@@ -135,7 +134,7 @@ export class RacePlayer {
     cancelAnimationFrame(this.raf);
     this.resizeObserver.disconnect();
     this.abortRequests();
-    for (const dispose of this.cleanup) dispose();
+    this.events.abort();
     cache.pin([]);
   }
 
@@ -254,11 +253,7 @@ export class RacePlayer {
     this.dirty = true;
     this.publish();
   }
-  setFollowCar(enabled: boolean): void {
-    if (!enabled) {
-      this.fit();
-      return;
-    }
+  followCar(): void {
     this.cameraMode = "follow";
     if (this.track)
       this.camera.scale = Math.max(
@@ -900,19 +895,12 @@ export class RacePlayer {
       }
       if (event.key.toLowerCase() === "f") this.fit();
     };
-    this.canvas.addEventListener("pointerdown", down);
-    this.canvas.addEventListener("pointermove", move);
-    this.canvas.addEventListener("pointerup", up);
-    this.canvas.addEventListener("pointercancel", up);
-    this.canvas.addEventListener("wheel", wheel, { passive: false });
-    this.canvas.addEventListener("keydown", key);
-    this.cleanup.push(() => {
-      this.canvas.removeEventListener("pointerdown", down);
-      this.canvas.removeEventListener("pointermove", move);
-      this.canvas.removeEventListener("pointerup", up);
-      this.canvas.removeEventListener("pointercancel", up);
-      this.canvas.removeEventListener("wheel", wheel);
-      this.canvas.removeEventListener("keydown", key);
-    });
+    const signal = this.events.signal;
+    this.canvas.addEventListener("pointerdown", down, { signal });
+    this.canvas.addEventListener("pointermove", move, { signal });
+    this.canvas.addEventListener("pointerup", up, { signal });
+    this.canvas.addEventListener("pointercancel", up, { signal });
+    this.canvas.addEventListener("wheel", wheel, { passive: false, signal });
+    this.canvas.addEventListener("keydown", key, { signal });
   }
 }

@@ -45,10 +45,6 @@ export class ReplayCache {
 
   constructor(readonly budget = 64 * 1024 * 1024) {}
 
-  get bytes() {
-    return this.used;
-  }
-
   get(key: string): ReplayChunk | undefined {
     const value = this.entries.get(key);
     if (value) {

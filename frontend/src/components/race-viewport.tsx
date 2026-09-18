@@ -161,7 +161,7 @@ export default function RaceViewport({
               type="button"
               aria-pressed={state.cameraMode === "follow"}
               disabled={!manifest || state.focusCar === null}
-              onClick={() => player.current?.setFollowCar(true)}
+              onClick={() => player.current?.followCar()}
             >
               ◎{" "}
               <span>

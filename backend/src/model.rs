@@ -314,7 +314,6 @@ pub struct CreateRunRequest {
 pub struct Circuit {
     pub id: String,
     pub name: String,
-    pub character: String,
     pub description: String,
     pub track: Track,
 }

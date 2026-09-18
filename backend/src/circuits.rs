@@ -51,7 +51,6 @@ pub fn catalog() -> Result<Vec<Circuit>> {
         circuit(
             "switchback",
             "Switchback",
-            "Hairpins",
             "Repeated hairpins with little time to straighten out.",
             11.,
             22.,
@@ -69,7 +68,6 @@ pub fn catalog() -> Result<Vec<Circuit>> {
         circuit(
             "chicane",
             "Chicane",
-            "Quick reversals",
             "Two tight chicane sequences demand precise changes of direction.",
             12.,
             18.,
@@ -91,7 +89,6 @@ pub fn catalog() -> Result<Vec<Circuit>> {
         circuit(
             "needle",
             "Needle",
-            "Tight returns",
             "Long approaches lead into two narrow hairpin returns.",
             10.,
             20.,
@@ -109,7 +106,6 @@ pub fn catalog() -> Result<Vec<Circuit>> {
         circuit(
             "esses",
             "Esses",
-            "Linked bends",
             "Alternating bends reward a controlled line from one corner into the next.",
             11.,
             18.,
@@ -131,7 +127,6 @@ pub fn catalog() -> Result<Vec<Circuit>> {
         circuit(
             "infield",
             "Infield",
-            "Technical",
             "A compact sequence of tight corners and deep infield turns.",
             10.,
             18.,
@@ -153,7 +148,6 @@ pub fn catalog() -> Result<Vec<Circuit>> {
         circuit(
             "gauntlet",
             "Gauntlet",
-            "Mixed challenge",
             "Hairpins, linked bends and an awkward infield test consistency over many laps.",
             10.,
             18.,
@@ -180,7 +174,6 @@ pub fn catalog() -> Result<Vec<Circuit>> {
 fn circuit(
     id: &str,
     name: &str,
-    character: &str,
     description: &str,
     width: f32,
     radius: f64,
@@ -197,7 +190,6 @@ fn circuit(
     Ok(Circuit {
         id: id.into(),
         name: name.into(),
-        character: character.into(),
         description: description.into(),
         track,
     })
