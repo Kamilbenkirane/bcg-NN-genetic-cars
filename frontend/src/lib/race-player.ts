@@ -6,7 +6,7 @@ import {
   ghostPoseAt,
   interpolateHeading,
   lapClock,
-  ReplayCache,
+  type ReplayChunk,
   sampleWindow,
   terminalTick,
   traceFrameAt,
@@ -51,7 +51,6 @@ export const EMPTY_PLAYBACK: PlaybackState = {
   selected: null,
 };
 const sensorAngles = [Math.PI / 2, Math.PI / 4, 0, -Math.PI / 4, -Math.PI / 2];
-const cache = new ReplayCache();
 
 export function fitCamera(bounds: number[], width: number, height: number) {
   const [xmin, ymin, xmax, ymax] = bounds;
@@ -89,6 +88,8 @@ export class RacePlayer {
   private scratch = new Float64Array(0);
   private hasFrame = false;
   private sampledStep = 0;
+  // ponytail: only the playhead window stays decoded; the immutable HTTP cache serves revisits.
+  private chunks = new Map<string, ReplayChunk>();
   private requests = new Map<string, AbortController>();
   private failures = new Set<string>();
   private step = 0;
@@ -135,7 +136,6 @@ export class RacePlayer {
     this.resizeObserver.disconnect();
     this.abortRequests();
     this.events.abort();
-    cache.pin([]);
   }
 
   setTrack(track: Track | null): void {
@@ -331,27 +331,31 @@ export class RacePlayer {
   private ensureWindow(): void {
     const manifest = this.manifest;
     if (!manifest) {
-      cache.pin([]);
+      this.chunks.clear();
       return;
     }
     const index = Math.floor(
       sampleWindow(manifest, this.step).before / manifest.framesPerChunk,
     );
-    const indices = [index - 1, index, index + 1].filter(
+    const indices = [index, index + 1, index - 1].filter(
       (i) => i >= 0 && i < manifest.chunks,
     );
-    cache.pin(indices.map((i) => this.key(i)));
-    for (const i of [index, index + 1, index - 1]) {
-      if (i >= 0 && i < manifest.chunks && manifest.availableChunks.includes(i))
-        this.loadChunk(i);
-    }
+    const keys = indices.map((i) => this.key(i));
+    for (const key of this.chunks.keys())
+      if (!keys.includes(key)) this.chunks.delete(key);
+    for (const i of indices)
+      if (manifest.availableChunks.includes(i)) this.loadChunk(i);
   }
 
   private loadChunk(index: number): void {
     const manifest = this.manifest;
     if (!manifest) return;
     const key = this.key(index);
-    if (cache.get(key) || this.requests.has(key) || this.failures.has(key))
+    if (
+      this.chunks.has(key) ||
+      this.requests.has(key) ||
+      this.failures.has(key)
+    )
       return;
     const controller = new AbortController();
     this.requests.set(key, controller);
@@ -368,7 +372,7 @@ export class RacePlayer {
           chunk.firstFrame + chunk.frameCount > manifest.totalFrames
         )
           throw new Error("Replay chunk does not match its manifest.");
-        cache.set(key, chunk);
+        this.chunks.set(key, chunk);
         this.dirty = true;
         this.lastTime = 0;
       })
@@ -439,8 +443,8 @@ export class RacePlayer {
     const manifest = this.manifest;
     if (!manifest) return false;
     const { before, after, fraction } = sampleWindow(manifest, this.step);
-    const a = cache.get(this.key(Math.floor(before / 32)));
-    const b = cache.get(this.key(Math.floor(after / 32)));
+    const a = this.chunks.get(this.key(Math.floor(before / 32)));
+    const b = this.chunks.get(this.key(Math.floor(after / 32)));
     this.ensureWindow();
     if (!a || !b) return false;
     const aOffset = (before - a.firstFrame) * manifest.carCount * 3;
@@ -675,22 +679,19 @@ export class RacePlayer {
     if (!this.track) return;
     const ctx = this.context;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const screenPoint = (p: number[]) => [
-      this.width / 2 + (p[0] - this.camera.x) * this.camera.scale,
-      this.height / 2 - (p[1] - this.camera.y) * this.camera.scale,
-    ];
+    const x =
+      this.width / 2 +
+      (this.track.spawn[0] - this.camera.x) * this.camera.scale;
+    const y =
+      this.height / 2 -
+      (this.track.spawn[1] - this.camera.y) * this.camera.scale;
     ctx.font = "600 10px system-ui";
     ctx.textAlign = "center";
-    for (const [label, point] of [
-      ["START / FINISH", this.track.spawn],
-    ] as const) {
-      const [x, y] = screenPoint(point);
-      if (x < 25 || x > this.width - 25 || y < 70 || y > this.height - 25)
-        continue;
+    if (x >= 25 && x <= this.width - 25 && y >= 70 && y <= this.height - 25) {
       ctx.fillStyle = "#10251fe6";
       ctx.fillRect(x - 47, y + 12, 94, 19);
       ctx.fillStyle = "#f0cc71";
-      ctx.fillText(label, x, y + 25);
+      ctx.fillText("START / FINISH", x, y + 25);
     }
     if (this.cameraMode === "overview" || this.width < 480) return;
     const w = 172,

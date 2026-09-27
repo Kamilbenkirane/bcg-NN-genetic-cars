@@ -5,7 +5,6 @@ export interface ReplayChunk {
   frameCount: number;
   carCount: number;
   poses: Float32Array;
-  byteLength: number;
 }
 
 export function decodeReplayChunk(buffer: ArrayBuffer): ReplayChunk {
@@ -29,53 +28,7 @@ export function decodeReplayChunk(buffer: ArrayBuffer): ReplayChunk {
   for (const value of poses)
     if (!Number.isFinite(value))
       throw new Error("Replay contains a non-finite pose.");
-  return {
-    firstFrame,
-    frameCount,
-    carCount,
-    poses,
-    byteLength: buffer.byteLength,
-  };
-}
-
-export class ReplayCache {
-  private entries = new Map<string, ReplayChunk>();
-  private used = 0;
-  private pinned = new Set<string>();
-
-  constructor(readonly budget = 64 * 1024 * 1024) {}
-
-  get(key: string): ReplayChunk | undefined {
-    const value = this.entries.get(key);
-    if (value) {
-      this.entries.delete(key);
-      this.entries.set(key, value);
-    }
-    return value;
-  }
-
-  set(key: string, chunk: ReplayChunk): void {
-    const existing = this.entries.get(key);
-    if (existing) this.used -= existing.byteLength;
-    this.entries.delete(key);
-    this.entries.set(key, chunk);
-    this.used += chunk.byteLength;
-    this.evict();
-  }
-
-  pin(keys: string[]): void {
-    this.pinned = new Set(keys);
-    this.evict();
-  }
-
-  private evict(): void {
-    for (const [key, chunk] of this.entries) {
-      if (this.used <= this.budget) break;
-      if (this.pinned.has(key)) continue;
-      this.entries.delete(key);
-      this.used -= chunk.byteLength;
-    }
-  }
+  return { firstFrame, frameCount, carCount, poses };
 }
 
 export function interpolateHeading(

@@ -12,7 +12,6 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{circuits, model::*, scheduler::Scheduler, store::engine_identity};
@@ -89,7 +88,7 @@ impl From<anyhow::Error> for ApiError {
         {
             StatusCode::CONFLICT
         } else {
-            tracing::error!(error=%format!("{error:#}"),"API operation failed");
+            eprintln!("API operation failed: {error:#}");
             StatusCode::INTERNAL_SERVER_ERROR
         };
         Self {
@@ -259,7 +258,6 @@ async fn replay(
 async fn chunk(
     State(app): State<App>,
     Path((id, generation, index)): Path<(String, u32, u32)>,
-    headers: HeaderMap,
 ) -> ApiResult<Response> {
     let data = app
         .jobs
@@ -267,22 +265,14 @@ async fn chunk(
         .chunk(&id, generation, index)
         .await?
         .ok_or_else(ApiError::missing)?;
-    let etag = format!("\"{:x}\"", Sha256::digest(&data));
-    if headers
-        .get(header::IF_NONE_MATCH)
-        .and_then(|v| v.to_str().ok())
-        == Some(&etag)
-    {
-        return Ok(StatusCode::NOT_MODIFIED.into_response());
-    }
+    // ponytail: immutable chunks are never revalidated, so no ETag.
     Ok((
         [
-            (header::CONTENT_TYPE, "application/octet-stream".to_owned()),
+            (header::CONTENT_TYPE, "application/octet-stream"),
             (
                 header::CACHE_CONTROL,
-                "private, max-age=31536000, immutable".to_owned(),
+                "private, max-age=31536000, immutable",
             ),
-            (header::ETAG, etag),
         ],
         data,
     )
@@ -352,7 +342,7 @@ async fn events(
                     continue;
                 }
                 Ok(_)=>{},
-                Err(error)=>{tracing::error!(%error,"SSE database read failed");break}
+                Err(error)=>{eprintln!("SSE database read failed: {error}");break}
             }
             tokio::select!{
                 result=changed.changed()=>{if result.is_err(){break}},

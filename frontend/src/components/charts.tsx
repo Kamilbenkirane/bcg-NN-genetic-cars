@@ -16,6 +16,22 @@ import {
 import { completion } from "@/lib/circuits";
 import type { GenerationSummary, RunStage } from "@/lib/types";
 
+const margin = { top: 12, right: 16, left: -18, bottom: 4 };
+const tick = { fontSize: 11, fill: "#838b83" };
+const xAxis = {
+  dataKey: "label",
+  axisLine: false,
+  tickLine: false,
+  minTickGap: 30,
+  tick,
+};
+const yAxis = { axisLine: false, tickLine: false, tick };
+const tooltipStyle = {
+  border: "1px solid #e3e5dc",
+  borderRadius: 8,
+  fontSize: 12,
+};
+
 export default memo(function Charts({
   summaries,
   stages,
@@ -25,24 +41,31 @@ export default memo(function Charts({
   stages: RunStage[];
   targetLaps: number;
 }) {
-  const data = summaries.map((summary) => ({
-    ...summary,
-    label: summary.generation + 1,
-    bestDistance: stages[summary.stageIndex]
-      ? completion(
-          summary.bestFitness,
-          stages[summary.stageIndex].circuit.track,
-          targetLaps,
-        )
-      : 0,
-    meanDistance: stages[summary.stageIndex]
-      ? completion(
-          summary.meanFitness,
-          stages[summary.stageIndex].circuit.track,
-          targetLaps,
-        )
-      : 0,
-  }));
+  const data = summaries.map((summary) => {
+    const track = stages[summary.stageIndex]?.circuit.track;
+    return {
+      ...summary,
+      label: summary.generation + 1,
+      bestDistance: track
+        ? completion(summary.bestFitness, track, targetLaps)
+        : 0,
+      meanDistance: track
+        ? completion(summary.meanFitness, track, targetLaps)
+        : 0,
+    };
+  });
+  const labelFormatter = (label: unknown) =>
+    `Generation ${label} · ${stages[summaries.find((s) => s.generation + 1 === Number(label))?.stageIndex ?? 0]?.circuit.name ?? ""}`;
+  const boundaries = stages
+    .slice(1)
+    .map((stage) => (
+      <ReferenceLine
+        key={stage.index}
+        x={stage.firstGeneration + 1}
+        stroke="#a3b89d"
+        strokeDasharray="4 4"
+      />
+    ));
   return (
     <div className="charts-grid">
       <section className="chart-card">
@@ -67,42 +90,14 @@ export default memo(function Charts({
         <div className="chart-body">
           {data.length ? (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={data}
-                margin={{ top: 12, right: 16, left: -18, bottom: 4 }}
-              >
-                {stages.slice(1).map((stage) => (
-                  <ReferenceLine
-                    key={stage.index}
-                    x={stage.firstGeneration + 1}
-                    stroke="#a3b89d"
-                    strokeDasharray="4 4"
-                  />
-                ))}
+              <LineChart data={data} margin={margin}>
+                {boundaries}
                 <CartesianGrid stroke="#ecece5" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={30}
-                  tick={{ fontSize: 11, fill: "#838b83" }}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  unit="%"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fill: "#838b83" }}
-                />
+                <XAxis {...xAxis} />
+                <YAxis domain={[0, 100]} unit="%" {...yAxis} />
                 <Tooltip
-                  contentStyle={{
-                    border: "1px solid #e3e5dc",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  labelFormatter={(label) =>
-                    `Generation ${label} · ${stages[summaries.find((s) => s.generation + 1 === Number(label))?.stageIndex ?? 0]?.circuit.name ?? ""}`
-                  }
+                  contentStyle={tooltipStyle}
+                  labelFormatter={labelFormatter}
                 />
                 <Line
                   dataKey="bestDistance"
@@ -157,41 +152,14 @@ export default memo(function Charts({
         <div className="chart-body">
           {data.length ? (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={data}
-                margin={{ top: 12, right: 16, left: -18, bottom: 4 }}
-              >
-                {stages.slice(1).map((stage) => (
-                  <ReferenceLine
-                    key={stage.index}
-                    x={stage.firstGeneration + 1}
-                    stroke="#a3b89d"
-                    strokeDasharray="4 4"
-                  />
-                ))}
+              <AreaChart data={data} margin={margin}>
+                {boundaries}
                 <CartesianGrid stroke="#ecece5" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={30}
-                  tick={{ fontSize: 11, fill: "#838b83" }}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fill: "#838b83" }}
-                />
+                <XAxis {...xAxis} />
+                <YAxis allowDecimals={false} {...yAxis} />
                 <Tooltip
-                  contentStyle={{
-                    border: "1px solid #e3e5dc",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  labelFormatter={(label) =>
-                    `Generation ${label} · ${stages[summaries.find((s) => s.generation + 1 === Number(label))?.stageIndex ?? 0]?.circuit.name ?? ""}`
-                  }
+                  contentStyle={tooltipStyle}
+                  labelFormatter={labelFormatter}
                 />
                 <Area
                   dataKey="crashed"

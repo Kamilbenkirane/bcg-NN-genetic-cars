@@ -6,12 +6,11 @@ import {
   ghostPoseAt,
   interpolateHeading,
   lapClock,
-  ReplayCache,
   sampleWindow,
   traceFrameAt,
 } from "./replay-buffer";
 
-test("replay buffers validate dimensions, preserve views and evict unpinned data", () => {
+test("replay chunks validate dimensions and preserve views", () => {
   const bytes = new ArrayBuffer(40);
   new Uint32Array(bytes, 0, 4).set([2, 0, 2, 1]);
   new Float32Array(bytes, 16).set([0, 1, 0, 2, 3, Math.PI]);
@@ -19,12 +18,6 @@ test("replay buffers validate dimensions, preserve views and evict unpinned data
   expect(chunk.poses.buffer).toBe(bytes);
   expect(chunk.frameCount).toBe(2);
   expect(() => decodeReplayChunk(bytes.slice(0, 39))).toThrow();
-  const cache = new ReplayCache(40);
-  cache.set("first", chunk);
-  cache.pin(["first"]);
-  cache.set("second", chunk);
-  expect(cache.get("first")).toBe(chunk);
-  expect(cache.get("second")).toBeUndefined();
   expect(
     Math.abs(interpolateHeading(Math.PI - 0.1, -Math.PI + 0.1, 0.5) - Math.PI),
   ).toBeLessThan(1e-6);

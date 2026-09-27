@@ -223,10 +223,7 @@ impl Store {
 
     pub async fn resume(&self, id: &str, device: &str) -> Result<RunDetail> {
         let detail = self.run(id).await?.context("Run not found")?;
-        ensure!(
-            detail.run.engine_version == engine_identity(device),
-            "Checkpoint belongs to an incompatible engine or device"
-        );
+        ensure_engine(&detail.run, device)?;
         ensure!(
             matches!(
                 detail.run.status,
@@ -651,9 +648,7 @@ impl Store {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        self.replay_event(id, generation).await?;
-        self.evict_cache(id, generation, None).await?;
-        Ok(())
+        self.evict_cache(id, generation, None).await
     }
 
     async fn evict_cache(&self, keep: &str, generation: u32, car: Option<u32>) -> Result<()> {
@@ -716,16 +711,6 @@ impl Store {
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
-        self.replay_event(id, generation).await
-    }
-
-    async fn replay_event(&self, id: &str, generation: u32) -> Result<()> {
-        if let Some(manifest) = self.replay(id, generation).await? {
-            let mut tx = self.writes.begin().await?;
-            let event=append_event(&mut tx,"replay",&json!({"runId":manifest.run_id,"generation":manifest.generation,"status":manifest.status,"availableChunks":manifest.available_chunks,"chunks":manifest.chunks,"error":manifest.error})).await?;
-            tx.commit().await?;
-            self.changed.send_replace(event);
-        }
         Ok(())
     }
 
@@ -802,6 +787,14 @@ pub fn engine_identity(device: &str) -> String {
     format!("{ENGINE_VERSION}-{:x}-{device}", hash)
 }
 
+pub fn ensure_engine(run: &RunSummary, device: &str) -> Result<()> {
+    ensure!(
+        run.engine_version == engine_identity(device),
+        "Checkpoint belongs to an incompatible engine or device"
+    );
+    Ok(())
+}
+
 async fn read_run_tx(tx: &mut Transaction<'_, Sqlite>, id: &str) -> Result<RunDetail> {
     run_detail(
         sqlx::query("SELECT * FROM runs WHERE id=?")
@@ -828,7 +821,6 @@ fn run_detail(row: SqliteRow) -> Result<RunDetail> {
             total_generations: row.try_get("total_generations")?,
         },
         stages: serde_json::from_str(&row.try_get::<String, _>("stages")?)?,
-        simulation_hz: SIMULATION_HZ,
     })
 }
 

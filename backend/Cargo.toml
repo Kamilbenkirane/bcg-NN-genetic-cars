@@ -19,7 +19,5 @@ sha2 = "0.10"
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["fs"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ts-rs = { version = "11", features = ["serde-compat"] }
 uuid = { version = "1", features = ["v4"] }

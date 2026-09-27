@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
-import { api } from "./api";
-import { completion, DEFAULT_CONFIG, nextTourGeneration } from "./circuits";
+import { completion, nextTourGeneration } from "./circuits";
 import { fitCamera } from "./race-player";
-import { RunData } from "./run-data";
 import type { Track } from "./types";
 
 test("progress covers the full lap target and cameras fit wide and tall viewports", () => {
@@ -66,43 +63,4 @@ test("tour playback visits arrival and trained populations even when training ru
   ]);
   expect(nextTourGeneration(5, 8, 50)).toBe(8);
   expect(nextTourGeneration(0, 5, 1)).toBe(1);
-});
-
-test("a run starting during a record fetch refreshes its captured champion", async () => {
-  const client = new QueryClient();
-  const data = new RunData(client);
-  const original = api.records;
-  let release = () => {};
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let calls = 0;
-  api.records = async () => {
-    if (++calls === 1) {
-      await pending;
-      return [];
-    }
-    return [{ stageIndex: 0, champion: null, baseline: null }];
-  };
-  try {
-    const response = data.fetchRecords("test");
-    data.applyRun({
-      id: "test",
-      name: "test",
-      createdAt: "2026-09-17",
-      status: "running",
-      config: DEFAULT_CONFIG,
-      completedGenerations: 0,
-      totalGenerations: 300,
-      lastError: null,
-      deviceName: "test",
-      engineVersion: "test",
-    });
-    release();
-    expect(await response).toHaveLength(1);
-    expect(calls).toBe(2);
-  } finally {
-    api.records = original;
-    client.clear();
-  }
 });

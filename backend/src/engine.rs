@@ -1,12 +1,7 @@
 //! Native Metal execution. All simulation and evolution arithmetic runs in engine.metal.
 //! The scheduler owns this object on one thread; every submission completes before return.
 
-use std::{
-    cell::RefCell,
-    mem::size_of,
-    ptr::NonNull,
-    rc::{Rc, Weak},
-};
+use std::{marker::PhantomData, mem::size_of, ptr::NonNull};
 
 use anyhow::{Context, Result, anyhow, ensure};
 use bytemuck::{Pod, Zeroable};
@@ -140,13 +135,11 @@ pub struct MetalEngine {
     rank: Pipeline,
     breed: Pipeline,
     summarize: Pipeline,
-    // Rc/RefCell also keep the engine on its sole owner thread.
-    geometry_cache: RefCell<Vec<Weak<GpuGeometry>>>,
+    // Keeps the engine on its sole owner thread.
+    _owner: PhantomData<*const ()>,
 }
 
 struct GpuGeometry {
-    points: Vec<[f32; 2]>,
-    width: f32,
     walls: Buffer,
     nodes: Buffer,
     centerline: Buffer,
@@ -160,7 +153,7 @@ pub struct Evaluation {
     genomes: Buffer,
     next_genomes: Buffer,
     states: Buffer,
-    geometry: Rc<GpuGeometry>,
+    geometry: GpuGeometry,
     recorded_poses: Buffer,
     lap_ends: Buffer,
     traces: Buffer,
@@ -180,7 +173,6 @@ impl Evaluation {
 
 pub struct BlockResult {
     pub first_step: u32,
-    pub frame_count: u32,
     pub poses: Vec<f32>,
     pub telemetry: Vec<TraceFrame>,
 }
@@ -221,7 +213,7 @@ impl MetalEngine {
                 device,
                 queue,
                 device_name,
-                geometry_cache: RefCell::new(Vec::new()),
+                _owner: PhantomData,
             })
         })
     }
@@ -281,11 +273,11 @@ impl MetalEngine {
             .context("Missing timing gate")? as u32;
         params.node_count = track.nodes.len() as u32;
         params.center_count = track.center_segments.len() as u32;
-        params.spawn_x = track.spawn[0];
-        params.spawn_y = track.spawn[1];
-        params.spawn_heading = track.spawn[2];
-        params.spawn_distance = track.spawn_distance;
-        params.lap_length = track.lap_length;
+        params.spawn_x = track.track.spawn[0];
+        params.spawn_y = track.track.spawn[1];
+        params.spawn_heading = track.track.spawn[2];
+        params.spawn_distance = track.track.spawn_distance;
+        params.lap_length = track.track.lap_length;
         params.tolerance = track.tolerance;
         params.finish_dx = track.finish_direction[0];
         params.finish_dy = track.finish_direction[1];
@@ -378,7 +370,6 @@ impl MetalEngine {
         if steps == 0 && evaluation.selected_car.is_none() {
             return Ok(BlockResult {
                 first_step,
-                frame_count: 0,
                 poses: vec![],
                 telemetry: vec![],
             });
@@ -440,7 +431,6 @@ impl MetalEngine {
         };
         Ok(BlockResult {
             first_step,
-            frame_count,
             poses,
             telemetry,
         })
@@ -582,23 +572,13 @@ impl MetalEngine {
         Ok(buffer)
     }
 
-    fn geometry_buffers(&self, track: &PreparedTrack) -> Result<Rc<GpuGeometry>> {
-        let mut cache = self.geometry_cache.borrow_mut();
-        cache.retain(|entry| entry.strong_count() != 0);
-        if let Some(buffers) = cache.iter().filter_map(Weak::upgrade).find(|buffers| {
-            buffers.width == track.track.width && buffers.points == track.track.points
-        }) {
-            return Ok(buffers);
-        }
-        let buffers = Rc::new(GpuGeometry {
-            points: track.track.points.clone(),
-            width: track.track.width,
+    // ponytail: uploads ~25 KB of road buffers per evaluation; cache by track if profiling shows it.
+    fn geometry_buffers(&self, track: &PreparedTrack) -> Result<GpuGeometry> {
+        Ok(GpuGeometry {
             walls: self.upload(&track.walls)?,
             nodes: self.upload(&track.nodes)?,
             centerline: self.upload(&track.center_segments)?,
-        });
-        cache.push(Rc::downgrade(&buffers));
-        Ok(buffers)
+        })
     }
 
     fn dispatch(
@@ -695,7 +675,7 @@ fn write_buffer<T: Pod>(buffer: &Buffer, values: &[T]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{geometry, model::Track};
+    use crate::geometry;
 
     #[test]
     #[ignore = "requires native Metal access on Apple Silicon"]
@@ -709,15 +689,7 @@ mod tests {
             })
             .collect();
         points.push(points[0]);
-        let track = geometry::prepare(&Track {
-            points,
-            left: vec![],
-            right: vec![],
-            width: 16.0,
-            spawn: [0.0; 3],
-            spawn_distance: 0.0,
-            lap_length: 0.0,
-        })?;
+        let track = geometry::prepare(&points, 16.0)?;
         let mut config = RunConfig::default();
         config.training.population = 1;
         config.training.elite_count = 1;
@@ -733,7 +705,7 @@ mod tests {
                 let mut evaluation = engine.begin(
                     &track,
                     &config,
-                    crate::model::driving_budget(&config, track.lap_length)?,
+                    crate::model::driving_budget(&config, track.track.lap_length)?,
                     0,
                     &genome,
                     Some(0),
@@ -755,7 +727,8 @@ mod tests {
                         let car = engine.outcomes(&evaluation)?.remove(0);
                         for &crossing in car.lap_ends.iter().take(target as usize - 1) {
                             if crossing.step + 1 > block.first_step
-                                && crossing.step + 1 < block.first_step + block.frame_count
+                                && crossing.step + 1
+                                    < block.first_step + block.telemetry.len() as u32
                             {
                                 let index = (crossing.step + 1 - block.first_step) as usize;
                                 let before = &block.telemetry[index - 1];
@@ -774,7 +747,7 @@ mod tests {
                 let car = engine.outcomes(&evaluation)?.remove(0);
                 assert_eq!(car.status, CarStatus::Finished);
                 assert!((90 * target..115 * target).contains(&car.terminal_step));
-                assert_eq!(car.fitness, track.lap_length * target as f32);
+                assert_eq!(car.fitness, track.track.lap_length * target as f32);
                 assert_eq!(car.completed_laps, target);
                 assert_eq!(car.lap_ends.len(), target as usize);
                 assert_eq!(car.lap_ends.last().unwrap().step + 1, car.terminal_step);
@@ -792,7 +765,7 @@ mod tests {
                 let inspection = engine.begin(
                     &track,
                     &config,
-                    crate::model::driving_budget(&config, track.lap_length)?,
+                    crate::model::driving_budget(&config, track.track.lap_length)?,
                     0,
                     &genome,
                     Some(0),
@@ -868,7 +841,7 @@ mod tests {
         let mut state = read_buffer::<GpuCarState>(&bounce.states, 1)?[0];
         state.x -= track.finish_direction[0];
         state.y -= track.finish_direction[1];
-        state.distance = track.lap_length - 1.0;
+        state.distance = track.track.lap_length - 1.0;
         state.previous_progress -= 1.0;
         state.completed_laps = 1;
         write_buffer(&bounce.states, &[state])?;
@@ -885,7 +858,7 @@ mod tests {
         let gate = track.walls.iter().find(|wall| wall.kind == 1).unwrap();
         state.x = gate.a[0];
         state.y = gate.a[1];
-        state.distance = track.lap_length;
+        state.distance = track.track.lap_length;
         state.completed_laps = 0;
         write_buffer(&corner.states, &[state])?;
         engine.advance(&mut corner, 1, false)?;
@@ -895,7 +868,7 @@ mod tests {
             "wall contacts win at the timing-line corners"
         );
         let mut reversed = track.clone();
-        reversed.spawn[2] += std::f32::consts::PI;
+        reversed.track.spawn[2] += std::f32::consts::PI;
         genome[21] = -genome[21];
         let mut evaluation = engine.begin(&reversed, &config, 300, 0, &genome, None)?;
         while !evaluation.done {

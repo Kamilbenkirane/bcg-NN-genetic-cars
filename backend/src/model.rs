@@ -10,29 +10,12 @@ pub const BLOCK_STEPS: u32 = 32;
 pub const REPLAY_VERSION: u32 = 2;
 pub const REPLAY_CHUNK_FRAMES: u32 = 32;
 
-pub fn parse_seed(seed: &str) -> anyhow::Result<u64> {
-    anyhow::ensure!(
-        !seed.is_empty() && seed.bytes().all(|b| b.is_ascii_digit()),
-        "seed must be an unsigned decimal integer"
-    );
-    Ok(seed.parse()?)
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct VehicleConfig {
     pub step_distance: f32,
     pub sensor_range: f32,
     pub max_heading_change: f32,
-}
-impl Default for VehicleConfig {
-    fn default() -> Self {
-        Self {
-            step_distance: 5.0,
-            sensor_range: 200.0,
-            max_heading_change: std::f32::consts::PI / 8.0,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -45,18 +28,6 @@ pub struct TrainingConfig {
     pub mutations: u32,
     pub mutation_scale: f32,
 }
-impl Default for TrainingConfig {
-    fn default() -> Self {
-        Self {
-            population: 500,
-            generations_per_circuit: 50,
-            target_laps: 5,
-            elite_count: 10,
-            mutations: 1,
-            mutation_scale: 1.0,
-        }
-    }
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -65,18 +36,35 @@ pub struct RunConfig {
     pub vehicle: VehicleConfig,
     pub training: TrainingConfig,
 }
+// Product defaults live in the frontend; this fixture serves the Rust tests.
+#[cfg(test)]
 impl Default for RunConfig {
     fn default() -> Self {
         Self {
             seed: "42".into(),
-            vehicle: VehicleConfig::default(),
-            training: TrainingConfig::default(),
+            vehicle: VehicleConfig {
+                step_distance: 5.0,
+                sensor_range: 200.0,
+                max_heading_change: std::f32::consts::PI / 8.0,
+            },
+            training: TrainingConfig {
+                population: 500,
+                generations_per_circuit: 50,
+                target_laps: 5,
+                elite_count: 10,
+                mutations: 1,
+                mutation_scale: 1.0,
+            },
         }
     }
 }
 impl RunConfig {
     pub fn seed_value(&self) -> anyhow::Result<u64> {
-        parse_seed(&self.seed)
+        anyhow::ensure!(
+            !self.seed.is_empty() && self.seed.bytes().all(|b| b.is_ascii_digit()),
+            "seed must be an unsigned decimal integer"
+        );
+        Ok(self.seed.parse()?)
     }
     pub fn validate(&self) -> anyhow::Result<()> {
         self.seed_value()?;
@@ -202,7 +190,6 @@ pub struct RunSummary {
 pub struct RunDetail {
     pub run: RunSummary,
     pub stages: Vec<RunStage>,
-    pub simulation_hz: f64,
 }
 
 impl RunDetail {
@@ -359,17 +346,6 @@ pub struct ReplayManifest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ReplayProgress {
-    pub run_id: String,
-    pub generation: u32,
-    pub status: ReplayStatus,
-    pub available_chunks: Vec<u32>,
-    pub chunks: u32,
-    pub error: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReplayRequest {
     #[serde(default)]
@@ -426,7 +402,6 @@ pub fn typescript() -> String {
         PreviewSnapshot::decl(),
         ReplayStatus::decl(),
         ReplayManifest::decl(),
-        ReplayProgress::decl(),
         ReplayRequest::decl(),
         TraceFrame::decl(),
         CarTrace::decl(),
