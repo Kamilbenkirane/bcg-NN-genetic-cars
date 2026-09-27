@@ -12,9 +12,13 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { DEFAULT_CONFIG, nextTourGeneration } from "@/lib/circuits";
-import { RunData } from "@/lib/run-data";
-import type { CreateRunRequest, PreviewSnapshot, RunStatus } from "@/lib/types";
-import { useRunEvents } from "@/lib/use-run-events";
+import type {
+  CreateRunRequest,
+  PreviewSnapshot,
+  RunDetail,
+  RunStatus,
+} from "@/lib/types";
+import { mergeGenerations, useRunEvents } from "@/lib/use-run-events";
 import Charts from "./charts";
 import Configuration from "./configuration";
 import RaceViewport from "./race-viewport";
@@ -76,7 +80,6 @@ export default function Workspace() {
 
 function ExperimentWorkspace() {
   const client = useQueryClient();
-  const [runData] = useState(() => new RunData(client));
   const params = useSearchParams();
   const runId = params.get("run");
   const generation = integerParam(params.get("generation"));
@@ -101,11 +104,7 @@ function ExperimentWorkspace() {
   const workspaceMain = useRef<HTMLElement>(null);
   const [showProgress, setShowProgress] = useState(false);
   const replayStarted = useRef(new Set<string>());
-  const receivePreview = useCallback(
-    (snapshot: PreviewSnapshot) => setPreview(snapshot),
-    [],
-  );
-  const connection = useRunEvents(runData, receivePreview);
+  const connection = useRunEvents(setPreview);
 
   const health = useQuery({
     queryKey: ["health"],
@@ -114,21 +113,21 @@ function ExperimentWorkspace() {
   });
   const runs = useQuery({
     queryKey: ["runs"],
-    queryFn: ({ signal }) => runData.fetchRuns(signal),
+    queryFn: ({ signal }) => api.runs(signal),
   });
   const detail = useQuery({
     queryKey: ["run", runId],
-    queryFn: runId
-      ? ({ signal }) => runData.fetchRun(runId, signal)
-      : skipToken,
-    enabled: !!runId,
+    queryFn: runId ? ({ signal }) => api.run(runId, signal) : skipToken,
   });
   const summaries = useQuery({
     queryKey: ["generations", runId],
     queryFn: runId
-      ? ({ signal }) => runData.fetchGenerations(runId, signal)
+      ? async ({ signal }) =>
+          mergeGenerations(
+            await api.generations(runId, signal),
+            client.getQueryData(["generations", runId]),
+          )
       : skipToken,
-    enabled: !!runId,
   });
   const circuits = useQuery({
     queryKey: ["circuits", health.data?.engineVersion],
@@ -137,10 +136,7 @@ function ExperimentWorkspace() {
   });
   const records = useQuery({
     queryKey: ["records", runId],
-    queryFn: runId
-      ? ({ signal }) => runData.fetchRecords(runId, signal)
-      : skipToken,
-    enabled: !!runId,
+    queryFn: runId ? ({ signal }) => api.records(runId, signal) : skipToken,
   });
   const run = detail.data?.run;
   const engineCompatible =
@@ -160,13 +156,13 @@ function ExperimentWorkspace() {
       if (!replayStarted.current.has(key)) {
         replayStarted.current.add(key);
         try {
-          return await runData.requestReplay(runId, generation, followLatest);
+          return await api.requestReplay(runId, generation, followLatest);
         } catch (requestError) {
           replayStarted.current.delete(key);
           throw requestError;
         }
       }
-      return runData.fetchReplay(runId, generation, signal);
+      return api.replay(runId, generation, signal);
     },
     enabled: hasGeneration,
     refetchInterval: (query) =>
@@ -242,14 +238,18 @@ function ExperimentWorkspace() {
     },
     [runId, generation],
   );
-  const ended = useCallback((value: boolean) => setPlaybackEnded(value), []);
+  const refreshRun = (detail: RunDetail) => {
+    for (const queryKey of [["runs"], ["run", detail.run.id]])
+      void client.invalidateQueries({ queryKey });
+  };
   const create = useMutation({
     mutationFn: (submitted: {
       request: CreateRunRequest;
       revision: number;
       hadViewedRun: boolean;
-    }) => runData.createRun(submitted.request),
+    }) => api.createRun(submitted.request),
     onSuccess: (data, submitted) => {
+      refreshRun(data);
       if (submission.current?.requestId === submitted.request.requestId)
         submission.current = null;
       setCreatedRun({ id: data.run.id, name: data.run.name });
@@ -269,11 +269,13 @@ function ExperimentWorkspace() {
     onError: (requestError) => setError(message(requestError)),
   });
   const stop = useMutation({
-    mutationFn: (id: string) => runData.stop(id),
+    mutationFn: api.stop,
+    onSuccess: refreshRun,
     onError: (requestError) => setError(message(requestError)),
   });
   const resume = useMutation({
-    mutationFn: (id: string) => runData.resume(id),
+    mutationFn: api.resume,
+    onSuccess: refreshRun,
     onError: (requestError) => setError(message(requestError)),
   });
   const stageIndex = Math.floor(
@@ -728,7 +730,7 @@ function ExperimentWorkspace() {
               preview={preview}
               selected={selected}
               onSelect={chooseCar}
-              onEndedChange={ended}
+              onEndedChange={setPlaybackEnded}
             />
           ) : (
             <div className="tour-welcome">

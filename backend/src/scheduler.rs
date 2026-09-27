@@ -15,7 +15,7 @@ use crate::{
     engine::{Evaluation, MetalEngine},
     geometry,
     model::*,
-    store::{Store, engine_identity, float_bytes},
+    store::{Store, ensure_engine, float_bytes},
 };
 
 struct Control {
@@ -73,10 +73,7 @@ impl Scheduler {
 
     pub async fn validate_generation(&self, id: &str, generation: u32) -> Result<RunDetail> {
         let detail = self.store.run(id).await?.context("Run not found")?;
-        ensure!(
-            detail.run.engine_version == engine_identity(&self.device),
-            "Checkpoint belongs to an incompatible engine or device"
-        );
+        ensure_engine(&detail.run, &self.device)?;
         ensure!(
             generation < detail.run.completed_generations,
             "Generation not found"
@@ -130,7 +127,7 @@ pub async fn start(store: Store) -> Result<Arc<Scheduler>> {
                 Err(_) => Some("Metal worker panicked".into()),
             };
             if let Some(error) = error {
-                tracing::error!(%error,"GPU scheduler stopped");
+                eprintln!("GPU scheduler stopped: {error}");
                 *worker_control.error.lock().unwrap() = Some(error);
             }
             let _ = done_tx.send(());
@@ -382,7 +379,10 @@ fn worker(
                         .map(|i| outcomes[i * count / take].clone())
                         .collect(),
                 });
-                tracing::info!(run_id=%active.detail.run.id,generation=summary.generation,elapsed_ms=summary.elapsed_ms,"Generation committed");
+                println!(
+                    "Generation {} committed for run {} in {:.1} ms",
+                    summary.generation, active.detail.run.id, summary.elapsed_ms
+                );
                 if active.detail.run.status != RunStatus::Running {
                     return Ok(true);
                 }
@@ -543,10 +543,7 @@ fn start_training(
     store: &Store,
     detail: RunDetail,
 ) -> Result<Training> {
-    ensure!(
-        detail.run.engine_version == engine_identity(engine.device_name()),
-        "Checkpoint belongs to an incompatible engine or device"
-    );
+    ensure_engine(&detail.run, engine.device_name())?;
     detail.run.config.validate()?;
     let generation = detail.run.completed_generations;
     let population = match runtime.block_on(store.population(&detail.run.id, generation))? {
@@ -576,10 +573,7 @@ fn begin_checkpoint(
     car: Option<u32>,
 ) -> Result<Evaluation> {
     let detail = runtime.block_on(store.run(id))?.context("Run not found")?;
-    ensure!(
-        detail.run.engine_version == engine_identity(engine.device_name()),
-        "Checkpoint belongs to an incompatible engine or device"
-    );
+    ensure_engine(&detail.run, engine.device_name())?;
     let population = runtime
         .block_on(store.population(id, generation))?
         .context("Checkpoint not found")?;
@@ -594,8 +588,9 @@ fn begin_stage(
     car: Option<u32>,
 ) -> Result<Evaluation> {
     let stage = detail.stage(generation)?;
+    let track = &stage.circuit.track;
     engine.begin(
-        &geometry::prepare(&stage.circuit.track)?,
+        &geometry::prepare(&track.points, track.width)?,
         &detail.run.config,
         stage.max_steps,
         generation,

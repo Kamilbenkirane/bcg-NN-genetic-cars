@@ -14,12 +14,6 @@ use tower_http::services::{ServeDir, ServeFile};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "genetic_cars=info,tower_http=info".into()),
-        )
-        .init();
     let mut args = env::args().skip(1);
     let mut port = 8501u16;
     let mut data_dir = env::var_os("GENETIC_CARS_DATA_DIR")
@@ -73,7 +67,11 @@ async fn main() -> Result<()> {
                 .not_found_service(ServeFile::new(frontend_dir.join("404.html"))),
         )
         .layer(middleware::from_fn(local_requests_only));
-    tracing::info!(url = %format!("http://127.0.0.1:{port}"), gpu = jobs.device_name(), data = %data_dir.display(), "Genetic Cars is ready");
+    println!(
+        "Genetic Cars is ready at http://127.0.0.1:{port} (GPU {}, data {})",
+        jobs.device_name(),
+        data_dir.display()
+    );
     let shutdown_jobs = jobs.clone();
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {

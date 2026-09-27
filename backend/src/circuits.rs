@@ -180,7 +180,7 @@ fn circuit(
     corners: &[[f64; 2]],
 ) -> Result<Circuit> {
     let points = rounded_loop(corners, radius).with_context(|| format!("Circuit {id}"))?;
-    let track = geometry::from_points(points, width)
+    let track = geometry::prepare(&points, width)
         .with_context(|| format!("Circuit {id}"))?
         .track;
     ensure!(
@@ -314,7 +314,7 @@ mod tests {
         for circuit in circuits {
             let track = circuit.track;
             assert_eq!(track.points.first(), track.points.last());
-            let prepared = geometry::prepare(&track)?;
+            let prepared = geometry::prepare(&track.points, track.width)?;
             assert_eq!(prepared.track.left, track.left);
             assert_eq!(prepared.track.right, track.right);
             let directions: Vec<_> = track

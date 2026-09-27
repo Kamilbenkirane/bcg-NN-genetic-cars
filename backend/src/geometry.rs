@@ -39,18 +39,11 @@ pub struct PreparedTrack {
     pub walls: Vec<GpuWall>,
     pub nodes: Vec<GpuBvhNode>,
     pub center_segments: Vec<GpuCenterSegment>,
-    pub spawn: [f32; 3],
-    pub spawn_distance: f32,
-    pub lap_length: f32,
     pub finish_direction: [f32; 2],
     pub tolerance: f32,
 }
 
-pub fn prepare(track: &Track) -> Result<PreparedTrack> {
-    from_points(track.points.clone(), track.width)
-}
-
-pub(crate) fn from_points(points: Vec<[f32; 2]>, width: f32) -> Result<PreparedTrack> {
+pub fn prepare(points: &[[f32; 2]], width: f32) -> Result<PreparedTrack> {
     ensure!(
         (4..=400).contains(&points.len()) && points.first() == points.last(),
         "a circuit must contain 4–400 points with a closed centerline"
@@ -161,7 +154,6 @@ pub(crate) fn from_points(points: Vec<[f32; 2]>, width: f32) -> Result<PreparedT
         points[0][1] + first.delta[1] * 0.5,
         directions[0][1].atan2(directions[0][0]),
     ];
-    let lap_length = total_length;
     // A passable timing gate, halfway along the first segment. Sensors ignore it.
     walls.push(GpuWall {
         a: [
@@ -180,20 +172,17 @@ pub(crate) fn from_points(points: Vec<[f32; 2]>, width: f32) -> Result<PreparedT
     let finish_direction = directions[0];
     Ok(PreparedTrack {
         track: Track {
-            points,
+            points: points.to_vec(),
             left,
             right,
             width,
             spawn,
             spawn_distance,
-            lap_length,
+            lap_length: total_length,
         },
         walls,
         nodes,
         center_segments,
-        spawn,
-        spawn_distance,
-        lap_length,
         finish_direction,
         tolerance,
     })
@@ -272,8 +261,8 @@ mod tests {
     #[test]
     fn prepared_track_contract() {
         let circuit = crate::circuits::catalog().unwrap().remove(0);
-        let a = prepare(&circuit.track).unwrap();
-        let b = prepare(&a.track).unwrap();
+        let a = prepare(&circuit.track.points, circuit.track.width).unwrap();
+        let b = prepare(&a.track.points, a.track.width).unwrap();
         assert_eq!(
             bytemuck::cast_slice::<_, u8>(&a.walls),
             bytemuck::cast_slice::<_, u8>(&b.walls)
@@ -281,18 +270,12 @@ mod tests {
         assert_eq!(a.track.points.first(), a.track.points.last());
         assert_eq!(a.track.left.first(), a.track.left.last());
         assert_eq!(a.track.right.first(), a.track.right.last());
-        assert!(a.lap_length > 600.0);
+        assert!(a.track.lap_length > 600.0);
         assert_eq!(a.nodes[0].escape as usize, a.nodes.len());
         assert_eq!(a.walls.iter().filter(|wall| wall.kind == 1).count(), 1);
         assert_eq!(std::mem::size_of::<GpuWall>(), 32);
         assert_eq!(std::mem::size_of::<GpuBvhNode>(), 32);
         assert_eq!(std::mem::size_of::<GpuCenterSegment>(), 32);
-        assert!(
-            from_points(
-                vec![[0., 0.], [40., 40.], [0., 40.], [40., 0.], [0., 0.]],
-                10.
-            )
-            .is_err()
-        );
+        assert!(prepare(&[[0., 0.], [40., 40.], [0., 40.], [40., 0.], [0., 0.]], 10.).is_err());
     }
 }
